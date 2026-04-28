@@ -54,13 +54,18 @@ if "map_zoom" not in st.session_state:
 # ==========================================
 st.markdown(f"""
 <style>
-    /* ── Import Inter (CCCM primary typeface) ── */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;400;600;700&display=swap');
+    /* ── Import Inter (body) + Montserrat (headings) ── */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;400;600;700&family=Montserrat:wght@400;600;700;800&display=swap');
 
     /* ── Global resets ── */
     html, body, [class*="css"] {{
         font-family: 'Inter', sans-serif;
         color: {BALTIC_SEA};
+    }}
+
+    /* ── Montserrat for all headings ── */
+    h1, h2, h3, h4, h5, h6 {{
+        font-family: 'Montserrat', sans-serif !important;
     }}
 
     /* ── Hide default Streamlit chrome for cleaner look ── */
@@ -777,27 +782,15 @@ draw.add_to(m)
 folium.LayerControl().add_to(m)
 
 # Render map with maximum height
+# NOTE: Only return click data and drawings — NOT zoom/center
+# Returning zoom/center causes reruns on every pan/zoom (the pulsing issue)
 output = st_folium(
     m,
     use_container_width=True,
     height=720,
-    returned_objects=["all_drawings", "last_object_clicked_tooltip", "last_object_clicked_popup", "zoom", "center"],
-    center=st.session_state["map_center"],
-    zoom=st.session_state["map_zoom"],
+    returned_objects=["all_drawings", "last_object_clicked_tooltip", "last_object_clicked_popup", "last_clicked"],
     key="main_map"
 )
-
-# ==========================================
-# INTERACTIVE: Persist map view state
-# ==========================================
-if output.get("zoom") is not None:
-    st.session_state["map_zoom"] = output["zoom"]
-if output.get("center") is not None:
-    center = output["center"]
-    if isinstance(center, dict):
-        st.session_state["map_center"] = [center.get("lat", 31.4), center.get("lng", 34.4)]
-    elif isinstance(center, (list, tuple)) and len(center) >= 2:
-        st.session_state["map_center"] = list(center)
 
 # ==========================================
 # INTERACTIVE: Parse click to auto-select site
@@ -807,11 +800,9 @@ def parse_site_id_from_click(output):
     # Try tooltip first (from GeoJsonTooltip: "Site_Name: xxx\nSite_ID: yyy")
     tooltip = output.get("last_object_clicked_tooltip")
     if tooltip and isinstance(tooltip, str):
-        # GeoJsonTooltip returns text like "Site_Name: Alrryan\nSite_ID: KYS0906"
         match = re.search(r'Site_ID[:\s]+([A-Za-z0-9_-]+)', tooltip)
         if match:
             return match.group(1)
-        # Marker tooltip format: "<b>Name</b><br>ID: KYS0906"
         match = re.search(r'ID:\s*([A-Za-z0-9_-]+)', tooltip)
         if match:
             return match.group(1)
@@ -830,9 +821,17 @@ def parse_site_id_from_click(output):
 
 clicked_id = parse_site_id_from_click(output)
 if clicked_id and clicked_id != st.session_state.get("clicked_site_id"):
-    # Verify it's a valid site for this agency
     if clicked_id in set(agency_df['Site_ID']):
         st.session_state["clicked_site_id"] = clicked_id
+        # Capture the clicked location as the new map center to preserve view
+        last_clicked = output.get("last_clicked")
+        if last_clicked:
+            if isinstance(last_clicked, dict):
+                st.session_state["map_center"] = [last_clicked.get("lat", 31.4), last_clicked.get("lng", 34.4)]
+            elif isinstance(last_clicked, (list, tuple)) and len(last_clicked) >= 2:
+                st.session_state["map_center"] = list(last_clicked)
+            # Preserve a close zoom level when clicking a site
+            st.session_state["map_zoom"] = max(st.session_state.get("map_zoom", 10), 13)
         st.rerun()
 
 # ==========================================
