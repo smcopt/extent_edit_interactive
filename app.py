@@ -48,6 +48,8 @@ if "map_center" not in st.session_state:
     st.session_state["map_center"] = [31.4, 34.4]
 if "map_zoom" not in st.session_state:
     st.session_state["map_zoom"] = 10
+if "force_map_view" not in st.session_state:
+    st.session_state["force_map_view"] = False
 
 # ==========================================
 # CUSTOM CSS — CCCM CLUSTER BRANDING
@@ -782,15 +784,21 @@ draw.add_to(m)
 folium.LayerControl().add_to(m)
 
 # Render map with maximum height
-# NOTE: Only return click data and drawings — NOT zoom/center
-# Returning zoom/center causes reruns on every pan/zoom (the pulsing issue)
-output = st_folium(
-    m,
+# Only force center/zoom when returning from a click-triggered rerun
+# Otherwise let the map be free (no pulsing on pan/zoom)
+st_folium_kwargs = dict(
     use_container_width=True,
     height=720,
     returned_objects=["all_drawings", "last_object_clicked_tooltip", "last_object_clicked_popup", "last_clicked"],
     key="main_map"
 )
+
+if st.session_state.get("force_map_view"):
+    st_folium_kwargs["center"] = st.session_state["map_center"]
+    st_folium_kwargs["zoom"] = st.session_state["map_zoom"]
+    st.session_state["force_map_view"] = False
+
+output = st_folium(m, **st_folium_kwargs)
 
 # ==========================================
 # INTERACTIVE: Parse click to auto-select site
@@ -823,15 +831,22 @@ clicked_id = parse_site_id_from_click(output)
 if clicked_id and clicked_id != st.session_state.get("clicked_site_id"):
     if clicked_id in set(agency_df['Site_ID']):
         st.session_state["clicked_site_id"] = clicked_id
-        # Capture the clicked location as the new map center to preserve view
-        last_clicked = output.get("last_clicked")
-        if last_clicked:
-            if isinstance(last_clicked, dict):
-                st.session_state["map_center"] = [last_clicked.get("lat", 31.4), last_clicked.get("lng", 34.4)]
-            elif isinstance(last_clicked, (list, tuple)) and len(last_clicked) >= 2:
-                st.session_state["map_center"] = list(last_clicked)
-            # Preserve a close zoom level when clicking a site
-            st.session_state["map_zoom"] = max(st.session_state.get("map_zoom", 10), 13)
+
+        # Use the site's known coordinates for precise centering
+        site_row = agency_df[agency_df['Site_ID'] == clicked_id].iloc[0]
+        if pd.notna(site_row.get('Latitude')) and pd.notna(site_row.get('Longitude')):
+            st.session_state["map_center"] = [float(site_row['Latitude']), float(site_row['Longitude'])]
+        else:
+            # Fallback to click coordinates
+            last_clicked = output.get("last_clicked")
+            if last_clicked:
+                if isinstance(last_clicked, dict):
+                    st.session_state["map_center"] = [last_clicked.get("lat", 31.4), last_clicked.get("lng", 34.4)]
+                elif isinstance(last_clicked, (list, tuple)) and len(last_clicked) >= 2:
+                    st.session_state["map_center"] = list(last_clicked)
+
+        st.session_state["map_zoom"] = 15
+        st.session_state["force_map_view"] = True
         st.rerun()
 
 # ==========================================
