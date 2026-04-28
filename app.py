@@ -44,6 +44,10 @@ STEEL_BLUE = "#4595AD"
 # ==========================================
 if "clicked_site_id" not in st.session_state:
     st.session_state["clicked_site_id"] = None
+if "map_center" not in st.session_state:
+    st.session_state["map_center"] = [31.4, 34.4]
+if "map_zoom" not in st.session_state:
+    st.session_state["map_zoom"] = 10
 
 # ==========================================
 # CUSTOM CSS — CCCM CLUSTER BRANDING
@@ -664,8 +668,12 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Initialize Map
-m = folium.Map(location=[31.4, 34.4], zoom_start=10, tiles=None)
+# Initialize Map (persisted center & zoom)
+m = folium.Map(
+    location=st.session_state["map_center"],
+    zoom_start=st.session_state["map_zoom"],
+    tiles=None
+)
 
 # ADD MULTIPLE BASEMAPS
 folium.TileLayer('OpenStreetMap', name='Street Map').add_to(m)
@@ -773,9 +781,23 @@ output = st_folium(
     m,
     use_container_width=True,
     height=720,
-    returned_objects=["all_drawings", "last_object_clicked_tooltip", "last_object_clicked_popup"],
+    returned_objects=["all_drawings", "last_object_clicked_tooltip", "last_object_clicked_popup", "zoom", "center"],
+    center=st.session_state["map_center"],
+    zoom=st.session_state["map_zoom"],
     key="main_map"
 )
+
+# ==========================================
+# INTERACTIVE: Persist map view state
+# ==========================================
+if output.get("zoom") is not None:
+    st.session_state["map_zoom"] = output["zoom"]
+if output.get("center") is not None:
+    center = output["center"]
+    if isinstance(center, dict):
+        st.session_state["map_center"] = [center.get("lat", 31.4), center.get("lng", 34.4)]
+    elif isinstance(center, (list, tuple)) and len(center) >= 2:
+        st.session_state["map_center"] = list(center)
 
 # ==========================================
 # INTERACTIVE: Parse click to auto-select site
