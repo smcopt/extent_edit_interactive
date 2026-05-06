@@ -629,7 +629,7 @@ else:
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"""
 <div style="text-align:center; padding: 0.5rem 0; opacity:0.6;">
-    <p style="font-size:0.7rem; margin:0;">CCCM Cluster — Site Management</p>
+    <p style="font-size:0.7rem; margin:0;">Site Management Cluster</p>
     <p style="font-size:0.65rem; margin:0.1rem 0 0 0;">Supporting displaced communities</p>
 </div>
 """, unsafe_allow_html=True)
